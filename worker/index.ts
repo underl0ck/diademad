@@ -1,14 +1,40 @@
 import { Hono } from "hono";
+import { secureHeaders } from "hono/secure-headers";
 import { withCache } from "./lib/cache";
 import { mockFundamentals, mockQuote, mockSeries } from "./lib/mock";
 import { fetchFundamentalsFmp, fetchQuoteFmp, fetchSeriesFmp } from "./lib/fmp";
+import { rateLimit, maxBodySize } from "./middleware/security";
 
-type Bindings = { FMP_API_KEY?: string };
+import type { Bindings } from "./lib/bindings";
+export type { Bindings };
+
+const USER_ID = "default";
 const app = new Hono<{ Bindings: Bindings }>();
 
+app.use("*", secureHeaders({
+  xFrameOptions: "DENY",
+  xContentTypeOptions: "nosniff",
+  referrerPolicy: "strict-origin-when-cross-origin",
+  strictTransportSecurity: "max-age=31536000; includeSubDomains",
+  contentSecurityPolicy: {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:"],
+    connectSrc: ["'self'"],
+  },
+}));
+
 app.get("/api/health", (c) =>
-  c.json({ ok: true, app: "diademad", ts: new Date().toISOString(), fmpConfigured: !!c.env.FMP_API_KEY })
+  c.json({ ok: true, app: "diademad", ts: new Date().toISOString() })
 );
+
+app.use("/api/quote/*", rateLimit("API_LIMITER"));
+app.use("/api/fundamentals/*", rateLimit("API_LIMITER"));
+app.use("/api/series/*", rateLimit("API_LIMITER"));
+app.use("/api/watchlist", rateLimit("HEAVY_LIMITER"));
+app.use("/api/watchlist/*", rateLimit("HEAVY_LIMITER"));
+app.use("/api/watchlist/*", maxBodySize(256));
 
 app.get("/api/quote/:ticker", async (c) => {
   const ticker = c.req.param("ticker").toUpperCase();
@@ -32,6 +58,33 @@ app.get("/api/series/:ticker", async (c) => {
     async () => (await fetchSeriesFmp(ticker, c.env)) ?? mockSeries(ticker));
   c.header("X-Cache", hit ? "HIT" : "MISS");
   return data ? c.json(data) : c.json({ error: "not found" }, 404);
+});
+
+const TICKER_RE = /^[A-Z0-9.]{1,10}$/;
+
+app.get("/api/watchlist", async (c) => {
+  const { results } = await c.env.DB
+    .prepare("SELECT ticker, added_at FROM watchlist WHERE user_id = ? ORDER BY added_at DESC")
+    .bind(USER_ID).all<{ ticker: string; added_at: number }>();
+  return c.json(results);
+});
+
+app.post("/api/watchlist/:ticker", async (c) => {
+  const ticker = c.req.param("ticker").toUpperCase();
+  if (!TICKER_RE.test(ticker)) return c.json({ error: "invalid ticker" }, 400);
+  await c.env.DB
+    .prepare("INSERT OR IGNORE INTO watchlist (id, user_id, ticker, added_at) VALUES (?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), USER_ID, ticker, Date.now()).run();
+  return c.json({ ok: true, ticker });
+});
+
+app.delete("/api/watchlist/:ticker", async (c) => {
+  const ticker = c.req.param("ticker").toUpperCase();
+  if (!TICKER_RE.test(ticker)) return c.json({ error: "invalid ticker" }, 400);
+  await c.env.DB
+    .prepare("DELETE FROM watchlist WHERE user_id = ? AND ticker = ?")
+    .bind(USER_ID, ticker).run();
+  return c.json({ ok: true, ticker });
 });
 
 export default app;
