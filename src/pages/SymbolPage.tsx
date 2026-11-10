@@ -7,6 +7,7 @@ import { HealthScoreCard } from "../components/HealthScoreCard";
 import { ConsensusCard } from "../components/ConsensusCard";
 import { ModelTable } from "../components/ModelTable";
 import { TechnicalPanel } from "../components/TechnicalPanel";
+import { WatchStar } from "../components/WatchStar";
 import { computeTechnicals } from "../lib/technical/indicators";
 import { fmtCurrency, fmtPct } from "../lib/format";
 
@@ -42,6 +43,7 @@ export default function SymbolPage() {
             diademad
           </Link>
           <div className="flex items-center gap-3 text-xs">
+            <WatchStar ticker={fundamentals.ticker} />
             <span className="rounded bg-gray-800 px-2 py-1 uppercase tracking-wide text-gray-400">
               {quote.source}
             </span>
