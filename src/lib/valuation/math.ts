@@ -12,3 +12,19 @@ export function costOfEquity(f: { riskFreeRate: number; beta: number; equityRisk
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
+
+export function waccFor(f: {
+  marketCap: number;
+  totalDebt: number;
+  interestExpenseTTM: number;
+  effectiveTaxRate: number;
+  riskFreeRate: number;
+  beta: number;
+  equityRiskPremium: number;
+}): number {
+  const E = f.marketCap;
+  const D = f.totalDebt;
+  const re = f.riskFreeRate + f.beta * f.equityRiskPremium;
+  const rd = (f.interestExpenseTTM / Math.max(D, 1)) * (1 - f.effectiveTaxRate);
+  return (E / (E + D)) * re + (D / (E + D)) * rd;
+}
