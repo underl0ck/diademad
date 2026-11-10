@@ -8,3 +8,7 @@ export function median(values: number[]): number | null {
 export function costOfEquity(f: { riskFreeRate: number; beta: number; equityRiskPremium: number }) {
   return f.riskFreeRate + f.beta * f.equityRiskPremium;
 }
+
+export function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
