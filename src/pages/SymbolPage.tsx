@@ -6,6 +6,8 @@ import { PriceChart } from "../components/PriceChart";
 import { HealthScoreCard } from "../components/HealthScoreCard";
 import { ConsensusCard } from "../components/ConsensusCard";
 import { ModelTable } from "../components/ModelTable";
+import { TechnicalPanel } from "../components/TechnicalPanel";
+import { computeTechnicals } from "../lib/technical/indicators";
 import { fmtCurrency, fmtPct } from "../lib/format";
 
 export default function SymbolPage() {
@@ -75,6 +77,9 @@ export default function SymbolPage() {
               subtitle={`${analysis.consensus.applicableCount} of ${analysis.consensus.totalCount} applicable`}
             >
               <ModelTable results={analysis.results} currentPrice={fundamentals.currentPrice} />
+            </Card>
+            <Card title="Technical indicators" subtitle="client-side, last bar">
+              <TechnicalPanel t={computeTechnicals(series.points.map((p) => p.close))} />
             </Card>
           </div>
           <div className="space-y-6">
