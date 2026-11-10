@@ -6,9 +6,7 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": [
-      "/api/*"
-    ]
+    "run_worker_first": ["/api/*"]
   },
   "observability": {
     "enabled": true
@@ -17,18 +15,19 @@
     {
       "name": "API_LIMITER",
       "namespace_id": "1001",
-      "simple": {
-        "limit": 60,
-        "period": 60
-      }
+      "simple": { "limit": 60, "period": 60 }
     },
     {
       "name": "HEAVY_LIMITER",
       "namespace_id": "1002",
-      "simple": {
-        "limit": 10,
-        "period": 60
-      }
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "diademad-db",
+      "database_id": "025aad43-4dd2-43d1-acf3-2e740245e47a"
     }
   ]
 }
