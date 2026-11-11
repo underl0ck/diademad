@@ -9,7 +9,10 @@ export type ModelId =
   | "dcf" | "fcff" | "fcfe" | "cap_earnings" | "epv" | "residual_income" | "eva"
   | "ddm" | "dividend_growth"
   | "pe" | "ps" | "pb" | "ev_ebitda" | "comps"
-  | "sum_of_parts" | "analyst_consensus" | "adjusted_net_assets";
+  | "sum_of_parts" | "analyst_consensus" | "adjusted_net_assets"
+  | "dcf_5y_revenue" | "dcf_5y_ebitda"
+  | "dcf_10y_growth" | "dcf_10y_revenue" | "dcf_10y_ebitda"
+  | "ev_ebit" | "dividend_multistage";
 
 export type NaReason =
   | "negative_earnings" | "no_dividend" | "negative_fcf"
@@ -43,6 +46,8 @@ export interface PeerMetrics {
   evToEbitda: number | null;
   pbRatio: number | null;
   priceToSales: number | null;
+  evToRevenue?: number | null;
+  evToEbit?: number | null;
 }
 
 export interface Fundamentals {
@@ -146,6 +151,7 @@ export interface ConsensusFairValue {
   mean: number;
   stdDev: number;
   spread: number;
+  certainty: "high" | "medium" | "low";
   applicableCount: number;
   totalCount: number;
   varianceVsPrice: number;

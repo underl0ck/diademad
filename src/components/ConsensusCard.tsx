@@ -34,6 +34,24 @@ export function ConsensusCard({
           <Field label="Spread" value={`${consensus.spread.toFixed(2)}×`} />
         </dl>
 
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">Certainty</span>
+          <span
+            className={
+              consensus.certainty === "high" ? "text-bull"
+              : consensus.certainty === "low" ? "text-bear"
+              : "text-gray-300"
+            }
+          >
+            {consensus.certainty.toUpperCase()}
+          </span>
+          <span className="text-gray-600">
+            ({consensus.certainty === "high" ? "models tightly clustered"
+              : consensus.certainty === "low" ? "models diverge widely"
+              : "moderate dispersion"})
+          </span>
+        </div>
+
         <div>
           <div className="text-xs text-gray-400">
             Applicable models: {consensus.applicableCount} / {consensus.totalCount}

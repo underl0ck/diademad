@@ -27,12 +27,15 @@ function prng(seed: number): () => number {
 }
 
 function makePeer(prefix: string, r: () => number, sector: string): PeerMetrics {
+  const ps = 0.5 + r() * 4;
   return {
     ticker: prefix, sector,
     peRatio: 8 + r() * 20,
     evToEbitda: 4 + r() * 12,
     pbRatio: 0.8 + r() * 3,
-    priceToSales: 0.5 + r() * 4,
+    priceToSales: ps,
+    evToRevenue: ps + 0.1 + r() * 0.5,
+    evToEbit: 10 + r() * 20,
   };
 }
 

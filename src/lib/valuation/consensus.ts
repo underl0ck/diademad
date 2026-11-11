@@ -24,7 +24,7 @@ export function buildConsensus(results: ModelResult[], currentPrice: number): Co
 
   if (ok.length === 0) {
     return {
-      fairValue: 0, median: 0, mean: 0, stdDev: 0, spread: 0,
+      fairValue: 0, median: 0, mean: 0, stdDev: 0, spread: 0, certainty: "low",
       applicableCount: 0, totalCount: results.length, varianceVsPrice: 0,
       includedModels: [], excluded,
     };
@@ -45,8 +45,11 @@ export function buildConsensus(results: ModelResult[], currentPrice: number): Co
   const clamped = Math.max(0.2 * currentPrice, Math.min(5 * currentPrice, median));
   const varianceVsPrice = currentPrice > 0 ? (clamped - currentPrice) / currentPrice : 0;
 
+  const certainty: "high" | "medium" | "low" =
+    spread <= 1.20 ? "high" : spread <= 1.75 ? "medium" : "low";
+
   return {
-    fairValue: clamped, median, mean, stdDev, spread,
+    fairValue: clamped, median, mean, stdDev, spread, certainty,
     applicableCount: ok.length, totalCount: results.length,
     varianceVsPrice, includedModels, excluded,
   };
