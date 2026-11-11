@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { WatchlistStrip } from "../components/WatchlistStrip";
-import { useMe, useLogout, loginWithGithub } from "../lib/auth";
+import { useMe, useLogout, loginWithGithub , loginWithGoogle } from "../lib/auth";
 
 const QUICK = ["ITUB", "PBR", "GROW"];
 
@@ -34,12 +34,20 @@ export default function Landing() {
               </button>
             </>
           ) : (
-            <button
+            <>
+                <button
               onClick={loginWithGithub}
               className="rounded border border-gray-700 px-3 py-1.5 hover:border-gray-500 hover:text-gray-200"
             >
               Sign in with GitHub
             </button>
+                <button
+              onClick={loginWithGoogle}
+              className="rounded border border-gray-700 px-3 py-1.5 hover:border-gray-500 hover:text-gray-200"
+            >
+              Sign in with Google
+            </button>
+              </>
           )}
         </div>
 

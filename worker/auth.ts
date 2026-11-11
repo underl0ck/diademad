@@ -101,7 +101,7 @@ auth.get("/github/callback", async (c) => {
 
   const now = Math.floor(Date.now() / 1000);
   const existing = await c.env.DB
-    .prepare("SELECT id FROM users WHERE github_id = ?")
+    .prepare("SELECT id FROM users WHERE provider = 'github' AND provider_id = ?")
     .bind(String(profile.id))
     .first<{ id: string }>();
 
@@ -110,17 +110,17 @@ auth.get("/github/callback", async (c) => {
     userId = existing.id;
     await c.env.DB
       .prepare(
-        `UPDATE users SET github_login = ?, email = ?, name = ?, avatar_url = ?, last_login_at = ?
+        `UPDATE users SET provider = 'github', provider_id = ?, github_login = ?, email = ?, name = ?, avatar_url = ?, last_login_at = ?
          WHERE id = ?`
       )
-      .bind(profile.login, email, profile.name, profile.avatar_url, now, userId)
+      .bind(String(profile.id), profile.login, email, profile.name, profile.avatar_url, now, userId)
       .run();
   } else {
     userId = crypto.randomUUID();
     await c.env.DB
       .prepare(
-        `INSERT INTO users (id, github_id, github_login, email, name, avatar_url, created_at, last_login_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO users (id, provider, provider_id, github_login, email, name, avatar_url, created_at, last_login_at)
+         VALUES (?, 'github', ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(userId, String(profile.id), profile.login, email, profile.name, profile.avatar_url, now, now)
       .run();
@@ -140,6 +140,137 @@ auth.get("/github/callback", async (c) => {
     maxAge: SESSION_TTL_SECONDS,
   });
   
+  return c.redirect("/", 302);
+});
+
+// Add these routes to worker/auth.ts, after the GitHub callback route
+
+const GOOGLE_STATE_COOKIE = "diademad_google_oauth_state";
+
+auth.get("/google/login", (c) => {
+  const state = crypto.randomUUID();
+  const origin = new URL(c.req.url).origin;
+  const params = new URLSearchParams({
+    client_id: c.env.GOOGLE_CLIENT_ID,
+    redirect_uri: `${origin}/api/auth/google/callback`,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+  });
+  setCookie(c, GOOGLE_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: c.req.url.startsWith("https://"),
+    sameSite: "Lax",
+    path: "/",
+    maxAge: STATE_TTL,
+  });
+  return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`, 302);
+});
+
+auth.get("/google/callback", async (c) => {
+  const code = c.req.query("code");
+  const state = c.req.query("state");
+  const cookieState = getCookie(c, GOOGLE_STATE_COOKIE);
+
+  console.log(`[auth] google callback fired, code=${code?.slice(0, 8)}..., state=${state}`);
+
+  deleteCookie(c, GOOGLE_STATE_COOKIE, { path: "/" });
+
+  if (!code || !state || state !== cookieState) {
+    return c.redirect("/?auth=failed&reason=state", 302);
+  }
+
+  const origin = new URL(c.req.url).origin;
+
+  // Exchange code for tokens
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: `${origin}/api/auth/google/callback`,
+    }),
+  });
+
+  if (!tokenRes.ok) return c.redirect("/?auth=failed&reason=token", 302);
+  const tokenData = (await tokenRes.json()) as { access_token?: string };
+  if (!tokenData.access_token) return c.redirect("/?auth=failed&reason=token", 302);
+
+  // Fetch user info from Google's OpenID Connect userinfo endpoint
+  const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+  if (!userinfoRes.ok) return c.redirect("/?auth=failed&reason=profile", 302);
+
+  const userinfo = (await userinfoRes.json()) as {
+    id: string; email: string; name: string; picture: string;
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const providerId = userinfo.id;
+  const email = userinfo.email;
+
+  // Upsert user with provider = 'google'
+  const existing = await c.env.DB
+    .prepare("SELECT id FROM users WHERE provider = 'google' AND provider_id = ?")
+    .bind(providerId)
+    .first<{ id: string }>();
+
+  let userId: string;
+  if (existing) {
+    userId = existing.id;
+    await c.env.DB
+      .prepare(
+        `UPDATE users SET email = ?, name = ?, avatar_url = ?, last_login_at = ?
+         WHERE id = ?`
+      )
+      .bind(email, userinfo.name, userinfo.picture, now, userId)
+      .run();
+  } else {
+    // Check if a user with this email already exists (e.g., from GitHub)
+    const existingEmail = await c.env.DB
+      .prepare("SELECT id FROM users WHERE email = ?")
+      .bind(email)
+      .first<{ id: string }>();
+
+    if (existingEmail) {
+      userId = existingEmail.id;
+      await c.env.DB
+        .prepare(
+          `UPDATE users SET provider = 'google', provider_id = ?, name = ?, avatar_url = ?, last_login_at = ?
+           WHERE id = ?`
+        )
+        .bind(providerId, userinfo.name, userinfo.picture, now, userId)
+        .run();
+    } else {
+      userId = crypto.randomUUID();
+      await c.env.DB
+        .prepare(
+          `INSERT INTO users (id, provider, provider_id, email, name, avatar_url, created_at, last_login_at)
+           VALUES (?, 'google', ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(userId, providerId, email, userinfo.name, userinfo.picture, now, now)
+        .run();
+    }
+  }
+
+  const sessionId = crypto.randomUUID();
+  await c.env.DB
+    .prepare("INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .bind(sessionId, userId, now, now + SESSION_TTL_SECONDS)
+    .run();
+
+  setCookie(c, SESSION_COOKIE, sessionId, {
+    httpOnly: true,
+    secure: c.req.url.startsWith("https://"),
+    sameSite: "Lax",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+  });
+
   return c.redirect("/", 302);
 });
 

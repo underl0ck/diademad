@@ -37,3 +37,7 @@ export function useLogout() {
 export function loginWithGithub() {
   window.location.href = "/api/auth/login";
 }
+
+export function loginWithGoogle() {
+  window.location.href = "/api/auth/google/login";
+}
